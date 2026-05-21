@@ -1,0 +1,12 @@
+export const MAX_STEP_EXP = 20;
+export const STEP_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20];
+export const DEFAULT_STEP_EXP = 0;
+export const INITIAL_LEVEL = 3;
+export const DEFAULT_CAMERA = { cellSize: 8, cellX: -32, cellY: -32 };
+export const DEFAULT_SHOW_QUADS = false;
+export const MIN_CELL_SIZE = 0.00001;
+export const MAX_CELL_SIZE = 64;
+export const ZOOM_PER_TICK = 1.15;
+export const METRICS_INTERVAL_MS = 100;
+export const FPS_SMOOTHING = 0.1;
+export const FIT_PADDING = 0.1;
