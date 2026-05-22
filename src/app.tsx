@@ -11,14 +11,14 @@ import {
   LifeCanvasHud
 } from "@/components";
 import { useHotkeys, useMediaQuery } from "@/hooks";
-import { hashlifeApi } from "@/stores";
-import { DEFAULT_PATTERN } from "@/lib";
+import { hashlifeApi, useHashlifeStore } from "@/stores";
 
 export function App() {
   const isMobile = useMediaQuery("(width < 48rem)");
 
   useEffect(() => {
-    hashlifeApi.loadPreset(DEFAULT_PATTERN.filename);
+    const { patternFilename } = useHashlifeStore.getState();
+    hashlifeApi.loadPreset(patternFilename);
   }, []);
 
   useHotkeys(

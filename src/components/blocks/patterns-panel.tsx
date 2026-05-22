@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Upload } from "lucide-react";
 import {
   Button,
@@ -20,11 +20,15 @@ import {
   TooltipTrigger,
   Typography
 } from "@/components";
-import { hashlifeApi } from "@/stores";
+import { hashlifeApi, useHashlifeStore } from "@/stores";
 import { PATTERNS, DEFAULT_PATTERN, type Pattern } from "@/lib";
 
 export function PatternsPanel() {
-  const [comboboxPattern, setComboboxPattern] = useState(() => DEFAULT_PATTERN);
+  const patternFilename = useHashlifeStore(s => s.patternFilename);
+  const comboboxPattern = useMemo(
+    () => PATTERNS.find(p => p.filename === patternFilename) ?? DEFAULT_PATTERN,
+    [patternFilename]
+  );
   const [rle, setRle] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,11 +62,7 @@ export function PatternsPanel() {
           itemToStringLabel={p => p.name}
           itemToStringValue={p => p.filename}
           value={comboboxPattern}
-          onValueChange={p => {
-            if (!p) return;
-            setComboboxPattern(p);
-            hashlifeApi.loadPreset(p.filename);
-          }}
+          onValueChange={p => p && hashlifeApi.loadPreset(p.filename)}
         >
           <ComboboxInput placeholder="Search patterns..." showClear />
           <ComboboxContent>

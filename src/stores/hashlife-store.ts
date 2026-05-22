@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { useTerminalStore } from "@/stores";
-import type {
-  MainToWorker,
-  WorkerToMain,
-  Camera,
-  Bounds,
-  Viewport
+import {
+  DEFAULT_PATTERN,
+  type MainToWorker,
+  type WorkerToMain,
+  type Camera,
+  type Bounds,
+  type Viewport
 } from "@/lib";
 import {
   DEFAULT_STEP_EXP,
@@ -28,6 +29,7 @@ export interface HashlifeStore {
   stepExp: number;
   mode: "view" | "edit";
   quadOverlay: boolean;
+  patternFilename: string;
   pointer: { sx: number; sy: number } | null;
   api: HashlifeApi;
 }
@@ -69,6 +71,7 @@ export const useHashlifeStore = create<HashlifeStore>(set => ({
   stepExp: DEFAULT_STEP_EXP,
   mode: "view",
   quadOverlay: DEFAULT_SHOW_QUADS,
+  patternFilename: DEFAULT_PATTERN.filename,
   pointer: null,
 
   api: {
@@ -115,7 +118,7 @@ export const useHashlifeStore = create<HashlifeStore>(set => ({
       });
     },
     loadPreset(filename) {
-      set({ playing: false, fps: 0 });
+      set({ playing: false, fps: 0, patternFilename: filename });
       post({ type: "loadPreset", filename });
     },
     loadRleText(text) {
