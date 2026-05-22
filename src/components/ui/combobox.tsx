@@ -1,4 +1,9 @@
-import { type ComponentProps, type ReactNode, useRef } from "react";
+import {
+  useCallback,
+  useRef,
+  type ComponentProps,
+  type ReactNode
+} from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { playSfx } from "@/lib";
 import { cn } from "@/utils";
@@ -172,35 +177,48 @@ export function ComboboxContent({
   children,
   ...props
 }: ComponentProps<typeof ComboboxPrimitive.Popup> & PositionerPick) {
-  return (
-    <ComboboxPrimitive.Portal>
-      <ComboboxPrimitive.Positioner
-        side={side}
-        sideOffset={sideOffset}
-        align={align}
-        alignOffset={alignOffset}
-        anchor={anchor}
-        className="z-50 outline-none"
+  const portalContainerRef = useRef<HTMLElement | null>(null);
+  const setPortalAnchor = useCallback((node: HTMLSpanElement | null) => {
+    portalContainerRef.current =
+      node?.closest<HTMLElement>("[data-vaul-drawer]") ?? null;
+  }, []);
+
+  const content = (
+    <ComboboxPrimitive.Positioner
+      side={side}
+      sideOffset={sideOffset}
+      align={align}
+      alignOffset={alignOffset}
+      anchor={anchor}
+      className="z-50 outline-none"
+    >
+      <ComboboxPrimitive.Popup
+        ref={ref}
+        className={cn(
+          "group/combobox-popup",
+          "relative min-w-32 overflow-hidden",
+          "w-(--anchor-width) max-w-(--available-width)",
+          "max-h-(--available-height)",
+          "border border-border bg-surface-raised",
+          "rounded-none",
+          "shadow-[0_8px_24px_#07050F99]",
+          "outline-none",
+          className
+        )}
+        {...props}
       >
-        <ComboboxPrimitive.Popup
-          ref={ref}
-          className={cn(
-            "group/combobox-popup",
-            "relative min-w-32 overflow-hidden",
-            "w-(--anchor-width) max-w-(--available-width)",
-            "max-h-(--available-height)",
-            "border border-border bg-surface-raised",
-            "rounded-none",
-            "shadow-[0_8px_24px_#07050F99]",
-            "outline-none",
-            className
-          )}
-          {...props}
-        >
-          {children}
-        </ComboboxPrimitive.Popup>
-      </ComboboxPrimitive.Positioner>
-    </ComboboxPrimitive.Portal>
+        {children}
+      </ComboboxPrimitive.Popup>
+    </ComboboxPrimitive.Positioner>
+  );
+
+  return (
+    <>
+      <span ref={setPortalAnchor} hidden />
+      <ComboboxPrimitive.Portal container={portalContainerRef}>
+        {content}
+      </ComboboxPrimitive.Portal>
+    </>
   );
 }
 
