@@ -49,7 +49,7 @@ export interface HashlifeApi {
   resize(view: Viewport): void;
   fit(): void;
   panBy(dx: number, dy: number): void;
-  zoomBy(x: number, y: number, deltaY: number): void;
+  zoomBy(x: number, y: number, factor: number): void;
   paintAt(x: number, y: number, alive: 0 | 1): void;
   setPointer(sx: number, sy: number): void;
   clearPointer(): void;
@@ -143,8 +143,8 @@ export const useHashlifeStore = create<HashlifeStore>(set => ({
     panBy(dx, dy) {
       post({ type: "panBy", dx, dy });
     },
-    zoomBy(x, y, deltaY) {
-      post({ type: "zoomBy", x, y, deltaY });
+    zoomBy(x, y, factor) {
+      post({ type: "zoomBy", x, y, factor });
     },
     paintAt(x, y, alive) {
       post({ type: "paintAt", x, y, alive });

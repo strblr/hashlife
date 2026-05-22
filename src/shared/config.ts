@@ -7,6 +7,7 @@ export const DEFAULT_SHOW_QUADS = false;
 export const MIN_CELL_SIZE = 0.00001;
 export const MAX_CELL_SIZE = 64;
 export const ZOOM_PER_TICK = 1.15;
+export const ZOOM_PER_DBLCLICK = 2;
 export const METRICS_INTERVAL_MS = 100;
 export const FPS_SMOOTHING = 0.1;
 export const FIT_PADDING = 0.1;

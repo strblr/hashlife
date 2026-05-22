@@ -13,7 +13,6 @@ import {
   DEFAULT_CAMERA,
   MIN_CELL_SIZE,
   MAX_CELL_SIZE,
-  ZOOM_PER_TICK,
   FPS_SMOOTHING,
   METRICS_INTERVAL_MS,
   FIT_PADDING
@@ -24,7 +23,7 @@ export type MainToWorker =
   | { type: "init"; offscreen: OffscreenCanvas; view: Viewport }
   | { type: "resize"; view: Viewport }
   | { type: "panBy"; dx: number; dy: number }
-  | { type: "zoomBy"; x: number; y: number; deltaY: number }
+  | { type: "zoomBy"; x: number; y: number; factor: number }
   | { type: "paintAt"; x: number; y: number; alive: 0 | 1 }
   | { type: "setQuadOverlay"; enabled: boolean }
   | { type: "play" }
@@ -150,9 +149,8 @@ function panBy(dx: number, dy: number): void {
   postCamera();
 }
 
-function zoomBy(x: number, y: number, deltaY: number): void {
+function zoomBy(x: number, y: number, factor: number): void {
   const cam = gfx.camera;
-  const factor = deltaY < 0 ? ZOOM_PER_TICK : 1 / ZOOM_PER_TICK;
   const nextSize = Math.max(
     MIN_CELL_SIZE,
     Math.min(MAX_CELL_SIZE, cam.cellSize * factor)
@@ -312,7 +310,7 @@ self.onmessage = (e: MessageEvent<MainToWorker>) => {
       panBy(msg.dx, msg.dy);
       break;
     case "zoomBy":
-      zoomBy(msg.x, msg.y, msg.deltaY);
+      zoomBy(msg.x, msg.y, msg.factor);
       break;
     case "paintAt":
       paintAt(msg.x, msg.y, msg.alive);

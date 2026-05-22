@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ComponentPropsWithoutRef } from "react";
 import { hashlifeApi, useHashlifeStore } from "@/stores";
+import { ZOOM_PER_TICK, ZOOM_PER_DBLCLICK } from "@/shared";
 import { cn, raf } from "@/utils";
 
 export function LifeCanvas({
@@ -16,10 +17,31 @@ export function LifeCanvas({
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
-    let drag:
-      | { kind: "pan"; lastX: number; lastY: number }
-      | { kind: "paint"; alive: 0 | 1 }
-      | null = null;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let lastTap: { time: number; x: number; y: number } | null = null;
+    let gesture: Gesture = null;
+
+    const screen = (clientX: number, clientY: number) => {
+      const rect = container.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const pair = () => {
+      if (pointers.size !== 2) return null;
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      return dist > 0 ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, dist } : null;
+    };
+
+    const isDoubleTap = (p: Point) => {
+      const now = performance.now();
+      const doubleTap =
+        lastTap &&
+        now - lastTap.time < DOUBLE_TAP_MS &&
+        Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < TAP_PX;
+      lastTap = doubleTap ? null : { time: now, ...p };
+      return doubleTap;
+    };
 
     // Hand canvas to the worker
     if (canvas.dataset.transferred !== "true") {
@@ -46,9 +68,10 @@ export function LifeCanvas({
     ro.observe(container);
 
     // Wheel zoom
-    const onWheelRaf = raf((cx: number, cy: number, dy: number) => {
-      const rect = container.getBoundingClientRect();
-      hashlifeApi.zoomBy(cx - rect.left, cy - rect.top, dy);
+    const onWheelRaf = raf((cx: number, cy: number, deltaY: number) => {
+      const p = screen(cx, cy);
+      const factor = deltaY < 0 ? ZOOM_PER_TICK : 1 / ZOOM_PER_TICK;
+      hashlifeApi.zoomBy(p.x, p.y, factor);
     });
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -58,49 +81,81 @@ export function LifeCanvas({
 
     // Pointer down
     const onPointerDown = (e: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
+      const p = screen(e.clientX, e.clientY);
       container.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, p);
+      if (pointers.size > 1) {
+        const prev = pair();
+        gesture = prev ? { kind: "pinch", prev } : null;
+        return;
+      }
       const { mode } = useHashlifeStore.getState();
       const wantsPan = e.button === 1 || (mode === "view" && e.button === 0);
       if (wantsPan) {
-        drag = { kind: "pan", lastX: sx, lastY: sy };
+        gesture = { kind: "pan", id: e.pointerId, start: p, last: p };
         return;
       }
       if (mode === "edit" && e.button === 0) {
         const alive = e.shiftKey ? 0 : 1;
-        drag = { kind: "paint", alive };
-        hashlifeApi.paintAt(sx, sy, alive);
+        gesture = { kind: "paint", id: e.pointerId, alive };
+        hashlifeApi.paintAt(p.x, p.y, alive);
       }
     };
     container.addEventListener("pointerdown", onPointerDown);
 
     // Pointer move
-    const onPointerMoveRaf = raf((cx: number, cy: number) => {
-      const rect = containerRef.current!.getBoundingClientRect();
-      const sx = cx - rect.left;
-      const sy = cy - rect.top;
-      hashlifeApi.setPointer(sx, sy);
-      if (!drag) return;
-      if (drag.kind === "pan") {
-        hashlifeApi.panBy(sx - drag.lastX, sy - drag.lastY);
-        drag.lastX = sx;
-        drag.lastY = sy;
-      } else {
-        hashlifeApi.paintAt(sx, sy, drag.alive);
+    const onPointerMoveRaf = raf((p: { x: number; y: number }) => {
+      hashlifeApi.setPointer(p.x, p.y);
+      const nextPinch = pair();
+      if (gesture?.kind === "pinch" && nextPinch) {
+        hashlifeApi.panBy(
+          nextPinch.x - gesture.prev.x,
+          nextPinch.y - gesture.prev.y
+        );
+        hashlifeApi.zoomBy(
+          nextPinch.x,
+          nextPinch.y,
+          nextPinch.dist / gesture.prev.dist
+        );
+        gesture.prev = nextPinch;
+        return;
+      }
+      if (gesture?.kind === "pan") {
+        hashlifeApi.panBy(p.x - gesture.last.x, p.y - gesture.last.y);
+        gesture.last = p;
+      } else if (gesture?.kind === "paint") {
+        hashlifeApi.paintAt(p.x, p.y, gesture.alive);
       }
     });
 
     const onPointerMove = (e: PointerEvent) => {
-      onPointerMoveRaf(e.clientX, e.clientY);
+      const p = screen(e.clientX, e.clientY);
+      if (pointers.has(e.pointerId)) {
+        pointers.set(e.pointerId, p);
+      }
+      onPointerMoveRaf(p);
     };
     container.addEventListener("pointermove", onPointerMove);
 
     // Pointer up or cancel
     const onPointerUpOrCancel = (e: PointerEvent) => {
+      const p = screen(e.clientX, e.clientY);
+      const wasTap =
+        e.type === "pointerup" &&
+        gesture?.kind === "pan" &&
+        gesture.id === e.pointerId &&
+        Math.hypot(p.x - gesture.start.x, p.y - gesture.start.y) < TAP_PX;
       container.releasePointerCapture(e.pointerId);
-      drag = null;
+      pointers.delete(e.pointerId);
+      const prev = pair();
+      gesture = prev ? { kind: "pinch", prev } : null;
+      if (wasTap) {
+        if (isDoubleTap(p)) {
+          hashlifeApi.zoomBy(p.x, p.y, ZOOM_PER_DBLCLICK);
+        }
+      } else if (e.type === "pointerup") {
+        lastTap = null;
+      }
     };
     container.addEventListener("pointerup", onPointerUpOrCancel);
     container.addEventListener("pointercancel", onPointerUpOrCancel);
@@ -142,3 +197,16 @@ export function LifeCanvas({
     </div>
   );
 }
+
+// Utils
+
+type Point = { x: number; y: number };
+type Pinch = Point & { dist: number };
+type Gesture =
+  | { kind: "pan"; id: number; start: Point; last: Point }
+  | { kind: "paint"; id: number; alive: 0 | 1 }
+  | { kind: "pinch"; prev: Pinch }
+  | null;
+
+const TAP_PX = 24;
+const DOUBLE_TAP_MS = 300;
