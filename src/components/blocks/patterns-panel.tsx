@@ -25,7 +25,6 @@ import { PATTERNS, DEFAULT_PATTERN, type Pattern } from "@/lib";
 
 export function PatternsPanel() {
   const [comboboxPattern, setComboboxPattern] = useState(() => DEFAULT_PATTERN);
-  const [comboboxOpen, setComboboxOpen] = useState(false);
   const [rle, setRle] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,14 +58,13 @@ export function PatternsPanel() {
           itemToStringLabel={p => p.name}
           itemToStringValue={p => p.filename}
           value={comboboxPattern}
-          onValueChange={p => p && setComboboxPattern(p)}
-          onOpenChange={setComboboxOpen}
+          onValueChange={p => {
+            if (!p) return;
+            setComboboxPattern(p);
+            hashlifeApi.loadPreset(p.filename);
+          }}
         >
-          <ComboboxInput
-            placeholder="Search patterns..."
-            showClear
-            onKeyDown={e => e.key === "Enter" && !comboboxOpen && loadPreset()}
-          />
+          <ComboboxInput placeholder="Search patterns..." showClear />
           <ComboboxContent>
             <ComboboxEmpty>No matching patterns</ComboboxEmpty>
             <ComboboxList>
