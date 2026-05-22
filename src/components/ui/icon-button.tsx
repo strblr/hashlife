@@ -12,6 +12,7 @@ export const iconButtonVariants = cva(
     "cursor-pointer select-none",
     "rounded-none",
     "whitespace-nowrap",
+    "backdrop-blur-md",
     "transition-all duration-150",
     "focus-visible:outline-none",
     "disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none",

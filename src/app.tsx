@@ -4,16 +4,19 @@ import {
   Header,
   InfoPanel,
   MetricsPanel,
+  MobileOverlay,
   PatternsPanel,
   TerminalPanel,
   LifeCanvas,
   LifeCanvasHud
 } from "@/components";
-import { useHotkeys } from "@/hooks";
+import { useHotkeys, useMediaQuery } from "@/hooks";
 import { hashlifeApi } from "@/stores";
 import { DEFAULT_PATTERN } from "@/lib";
 
 export function App() {
+  const isMobile = useMediaQuery("(width < 48rem)");
+
   useEffect(() => {
     hashlifeApi.loadPreset(DEFAULT_PATTERN.filename);
   }, []);
@@ -32,20 +35,30 @@ export function App() {
     []
   );
 
+  const panels = (
+    <>
+      <ControlsPanel />
+      <PatternsPanel />
+      <MetricsPanel />
+      <InfoPanel />
+      <TerminalPanel />
+    </>
+  );
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <Header />
-      <main className="flex min-h-0 flex-1 gap-4 p-4">
+      {!isMobile && <Header />}
+      <main className="flex min-h-0 flex-1 md:gap-4 md:p-4">
         <LifeCanvas className="min-w-0 flex-1">
           <LifeCanvasHud />
         </LifeCanvas>
-        <aside className="flex w-90 shrink-0 flex-col gap-4 overflow-y-auto pr-1 *:shrink-0">
-          <ControlsPanel />
-          <PatternsPanel />
-          <MetricsPanel />
-          <InfoPanel />
-          <TerminalPanel />
-        </aside>
+        {isMobile ? (
+          <MobileOverlay>{panels}</MobileOverlay>
+        ) : (
+          <aside className="flex w-90 shrink-0 flex-col gap-4 overflow-y-auto pr-1 *:shrink-0">
+            {panels}
+          </aside>
+        )}
       </main>
     </div>
   );

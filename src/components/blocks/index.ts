@@ -6,5 +6,6 @@ export * from "./info-panel";
 export * from "./life-canvas";
 export * from "./life-canvas-hud";
 export * from "./metrics-panel";
+export * from "./mobile-overlay";
 export * from "./patterns-panel";
 export * from "./terminal-panel";
