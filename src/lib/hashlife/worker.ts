@@ -30,7 +30,7 @@ export type MainToWorker =
   | { type: "pause" }
   | { type: "stepOnce" }
   | { type: "setStepExp"; stepExp: number }
-  | { type: "reset" }
+  | { type: "clear" }
   | { type: "collectGarbage" }
   | { type: "fit" }
   | { type: "loadPreset"; filename: string }
@@ -340,14 +340,14 @@ self.onmessage = (e: MessageEvent<MainToWorker>) => {
     case "setStepExp":
       hl.setStepExp(msg.stepExp);
       break;
-    case "reset":
+    case "clear":
       pauseInternal();
       hl.clear();
       hl.gc();
       dirty = true;
       postMetrics();
       postBounds(null);
-      postLog({ type: "output", text: "Reset universe." });
+      postLog({ type: "output", text: "Cleared universe." });
       logGc();
       break;
     case "collectGarbage":

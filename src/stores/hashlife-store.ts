@@ -35,7 +35,7 @@ export interface HashlifeStore {
 export interface HashlifeApi {
   togglePlay(): void;
   stepOnce(): void;
-  reset(): void;
+  clear(): void;
   collectGarbage(): void;
   setStepExp(n: number): void;
   bumpStepExp(delta: number): void;
@@ -82,9 +82,9 @@ export const useHashlifeStore = create<HashlifeStore>(set => ({
     stepOnce() {
       post({ type: "stepOnce" });
     },
-    reset() {
+    clear() {
       set({ playing: false, fps: 0 });
-      post({ type: "reset" });
+      post({ type: "clear" });
     },
     collectGarbage() {
       post({ type: "collectGarbage" });

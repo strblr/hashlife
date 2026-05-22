@@ -22,7 +22,7 @@ export function App() {
     [
       { code: "Space", action: hashlifeApi.togglePlay },
       { code: "ArrowRight", action: hashlifeApi.stepOnce, repeat: true },
-      { code: "KeyR", action: hashlifeApi.reset },
+      { code: "KeyC", action: hashlifeApi.clear },
       { code: "KeyE", action: hashlifeApi.toggleMode },
       { code: "KeyQ", action: hashlifeApi.toggleQuadOverlay },
       { code: "KeyF", action: hashlifeApi.fit },

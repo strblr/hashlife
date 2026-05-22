@@ -63,8 +63,8 @@ export function ControlsPanel() {
           >
             Step
           </Button>
-          <Button size="SM" variant="GHOST" onClick={hashlifeApi.reset}>
-            Reset
+          <Button size="SM" variant="GHOST" onClick={hashlifeApi.clear}>
+            Clear
           </Button>
           <Button size="SM" variant="GHOST" onClick={hashlifeApi.fit}>
             Fit
