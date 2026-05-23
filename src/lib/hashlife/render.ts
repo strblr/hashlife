@@ -1,5 +1,13 @@
-import type { Node } from ".";
 import { DEFAULT_CAMERA, DEFAULT_SHOW_QUADS } from "@/shared";
+import {
+  nodeLevel,
+  nodeNe,
+  nodeNw,
+  nodePopulation,
+  nodeSe,
+  nodeSw,
+  type Node
+} from "./hashlife";
 
 // colors
 
@@ -60,6 +68,12 @@ let g_dotPx = 1;
 let g_cacheId = 0;
 let g_px = camera.cellSize * view.dpr;
 let g_showGrid = camera.cellSize >= GRID_THRESHOLD_CSS;
+let gfxCap = 4096;
+let gfxCache = new Uint32Array(gfxCap);
+let gfxOffset = new Uint32Array(gfxCap);
+let gfxLen = new Uint32Array(gfxCap);
+let gfxX = new Float64Array(gfxCap);
+let gfxY = new Float64Array(gfxCap);
 
 export function init(c: OffscreenCanvas) {
   canvas = c;
@@ -207,7 +221,8 @@ export function render(root: Node): void {
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
-  const size = 2 ** root.level;
+  const rootLevel = nodeLevel[root];
+  const size = 2 ** rootLevel;
   const half = size * 0.5;
   const nodeX = (-half - camera.cellX) * g_px;
   const nodeY = (-half - camera.cellY) * g_px;
@@ -224,7 +239,7 @@ export function render(root: Node): void {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, g_len / 3);
   }
 
-  if (showQuads && root.level > 0 && screenSize >= g_dotPx) {
+  if (showQuads && rootLevel > 0 && screenSize >= g_dotPx) {
     g_len = 0;
     g_cacheId++;
     emitQuad(root, nodeX, nodeY, screenSize);
@@ -241,40 +256,41 @@ export function render(root: Node): void {
 }
 
 function emit(n: Node, nodeX: number, nodeY: number, screenSize: number): void {
+  const nodeR = nodeX + screenSize;
+  const nodeB = nodeY + screenSize;
   if (
-    n.population === 0 ||
+    nodePopulation[n] === 0 ||
     nodeX >= g_fbW ||
     nodeY >= g_fbH ||
-    nodeX + screenSize <= 0 ||
-    nodeY + screenSize <= 0
+    nodeR <= 0 ||
+    nodeB <= 0
   ) {
     return;
   }
 
-  if (n.level === 0 || screenSize < g_dotPx) {
-    if (g_len >= g_cap) growData(g_len + 3);
-    g_data[g_len] = nodeX;
-    g_data[g_len + 1] = nodeY;
-    g_data[g_len + 2] = screenSize;
-    g_len += 3;
+  if (nodeLevel[n] === 0 || screenSize < g_dotPx) {
+    const o = g_len;
+    const end = o + 3;
+    if (end > g_cap) growData(end);
+    g_data[o] = nodeX;
+    g_data[o + 1] = nodeY;
+    g_data[o + 2] = screenSize;
+    g_len = end;
     return;
   }
 
-  if (
-    nodeX >= 0 &&
-    nodeY >= 0 &&
-    nodeX + screenSize <= g_fbW &&
-    nodeY + screenSize <= g_fbH
-  ) {
+  if (nodeX >= 0 && nodeY >= 0 && nodeR <= g_fbW && nodeB <= g_fbH) {
     emitInside(n, nodeX, nodeY, screenSize);
     return;
   }
 
   const half = screenSize * 0.5;
-  emit(n.nw!, nodeX, nodeY, half);
-  emit(n.ne!, nodeX + half, nodeY, half);
-  emit(n.sw!, nodeX, nodeY + half, half);
-  emit(n.se!, nodeX + half, nodeY + half, half);
+  const xh = nodeX + half;
+  const yh = nodeY + half;
+  emit(nodeNw[n], nodeX, nodeY, half);
+  emit(nodeNe[n], xh, nodeY, half);
+  emit(nodeSw[n], nodeX, yh, half);
+  emit(nodeSe[n], xh, yh, half);
 }
 
 function emitInside(
@@ -283,26 +299,30 @@ function emitInside(
   nodeY: number,
   screenSize: number
 ): void {
-  if (n.population === 0) return;
+  if (nodePopulation[n] === 0) return;
 
-  if (n.level === 0 || screenSize < g_dotPx) {
-    if (g_len >= g_cap) growData(g_len + 3);
-    g_data[g_len] = nodeX;
-    g_data[g_len + 1] = nodeY;
-    g_data[g_len + 2] = screenSize;
-    g_len += 3;
+  if (nodeLevel[n] === 0 || screenSize < g_dotPx) {
+    const o = g_len;
+    const end = o + 3;
+    if (end > g_cap) growData(end);
+    g_data[o] = nodeX;
+    g_data[o + 1] = nodeY;
+    g_data[o + 2] = screenSize;
+    g_len = end;
     return;
   }
 
   // Memo hit: copy the first occurrence's already-emitted g_data slice
-  if (n.gfxCache === g_cacheId) {
-    const len = n.gfxLen;
-    if (g_len + len > g_cap) growData(g_len + len);
+  if (n >= gfxCap) growGfx(n + 1);
+  if (gfxCache[n] === g_cacheId) {
+    const len = gfxLen[n];
+    const outEnd = g_len + len;
+    if (outEnd > g_cap) growData(outEnd);
     const data = g_data;
-    let src = n.gfxOffset;
+    let src = gfxOffset[n];
     const end = src + len;
-    const dx = nodeX - n.gfxX;
-    const dy = nodeY - n.gfxY;
+    const dx = nodeX - gfxX[n];
+    const dy = nodeY - gfxY[n];
     let o = g_len;
     while (src < end) {
       data[o] = data[src] + dx;
@@ -311,22 +331,24 @@ function emitInside(
       src += 3;
       o += 3;
     }
-    g_len += len;
+    g_len = outEnd;
     return;
   }
 
   // Memo miss: recurse normally, then record the g_data slice
   const start = g_len;
   const half = screenSize * 0.5;
-  emitInside(n.nw!, nodeX, nodeY, half);
-  emitInside(n.ne!, nodeX + half, nodeY, half);
-  emitInside(n.sw!, nodeX, nodeY + half, half);
-  emitInside(n.se!, nodeX + half, nodeY + half, half);
-  n.gfxCache = g_cacheId;
-  n.gfxOffset = start;
-  n.gfxLen = g_len - start;
-  n.gfxX = nodeX;
-  n.gfxY = nodeY;
+  const xh = nodeX + half;
+  const yh = nodeY + half;
+  emitInside(nodeNw[n], nodeX, nodeY, half);
+  emitInside(nodeNe[n], xh, nodeY, half);
+  emitInside(nodeSw[n], nodeX, yh, half);
+  emitInside(nodeSe[n], xh, yh, half);
+  gfxCache[n] = g_cacheId;
+  gfxOffset[n] = start;
+  gfxLen[n] = g_len - start;
+  gfxX[n] = nodeX;
+  gfxY[n] = nodeY;
 }
 
 function emitQuad(
@@ -335,38 +357,39 @@ function emitQuad(
   nodeY: number,
   screenSize: number
 ): void {
+  const nodeR = nodeX + screenSize;
+  const nodeB = nodeY + screenSize;
   if (
-    n.population === 0 ||
+    nodePopulation[n] === 0 ||
     nodeX >= g_fbW ||
     nodeY >= g_fbH ||
-    nodeX + screenSize <= 0 ||
-    nodeY + screenSize <= 0
+    nodeR <= 0 ||
+    nodeB <= 0
   ) {
     return;
   }
 
-  if (
-    nodeX >= 0 &&
-    nodeY >= 0 &&
-    nodeX + screenSize <= g_fbW &&
-    nodeY + screenSize <= g_fbH
-  ) {
+  if (nodeX >= 0 && nodeY >= 0 && nodeR <= g_fbW && nodeB <= g_fbH) {
     emitQuadInside(n, nodeX, nodeY, screenSize);
     return;
   }
 
-  if (g_len >= g_cap) growData(g_len + 3);
-  g_data[g_len] = nodeX;
-  g_data[g_len + 1] = nodeY;
-  g_data[g_len + 2] = screenSize;
-  g_len += 3;
+  const o = g_len;
+  const end = o + 3;
+  if (end > g_cap) growData(end);
+  g_data[o] = nodeX;
+  g_data[o + 1] = nodeY;
+  g_data[o + 2] = screenSize;
+  g_len = end;
 
   const half = screenSize * 0.5;
-  if (n.level === 1 || half < g_dotPx) return;
-  emitQuad(n.nw!, nodeX, nodeY, half);
-  emitQuad(n.ne!, nodeX + half, nodeY, half);
-  emitQuad(n.sw!, nodeX, nodeY + half, half);
-  emitQuad(n.se!, nodeX + half, nodeY + half, half);
+  if (nodeLevel[n] === 1 || half < g_dotPx) return;
+  const xh = nodeX + half;
+  const yh = nodeY + half;
+  emitQuad(nodeNw[n], nodeX, nodeY, half);
+  emitQuad(nodeNe[n], xh, nodeY, half);
+  emitQuad(nodeSw[n], nodeX, yh, half);
+  emitQuad(nodeSe[n], xh, yh, half);
 }
 
 function emitQuadInside(
@@ -375,17 +398,19 @@ function emitQuadInside(
   nodeY: number,
   screenSize: number
 ): void {
-  if (n.population === 0) return;
+  if (nodePopulation[n] === 0) return;
 
   // Memo hit: copy the first occurrence's already-emitted g_data slice
-  if (n.gfxCache === g_cacheId) {
-    const len = n.gfxLen;
-    if (g_len + len > g_cap) growData(g_len + len);
+  if (n >= gfxCap) growGfx(n + 1);
+  if (gfxCache[n] === g_cacheId) {
+    const len = gfxLen[n];
+    const outEnd = g_len + len;
+    if (outEnd > g_cap) growData(outEnd);
     const data = g_data;
-    let src = n.gfxOffset;
+    let src = gfxOffset[n];
     const end = src + len;
-    const dx = nodeX - n.gfxX;
-    const dy = nodeY - n.gfxY;
+    const dx = nodeX - gfxX[n];
+    const dy = nodeY - gfxY[n];
     let o = g_len;
     while (src < end) {
       data[o] = data[src] + dx;
@@ -394,30 +419,34 @@ function emitQuadInside(
       src += 3;
       o += 3;
     }
-    g_len += len;
+    g_len = outEnd;
     return;
   }
 
   // Memo miss: recurse normally, then record the g_data slice
   const start = g_len;
-  if (g_len >= g_cap) growData(g_len + 3);
-  g_data[g_len] = nodeX;
-  g_data[g_len + 1] = nodeY;
-  g_data[g_len + 2] = screenSize;
-  g_len += 3;
+  const o = g_len;
+  const end = o + 3;
+  if (end > g_cap) growData(end);
+  g_data[o] = nodeX;
+  g_data[o + 1] = nodeY;
+  g_data[o + 2] = screenSize;
+  g_len = end;
 
   const half = screenSize * 0.5;
-  if (n.level > 1 && half >= g_dotPx) {
-    emitQuadInside(n.nw!, nodeX, nodeY, half);
-    emitQuadInside(n.ne!, nodeX + half, nodeY, half);
-    emitQuadInside(n.sw!, nodeX, nodeY + half, half);
-    emitQuadInside(n.se!, nodeX + half, nodeY + half, half);
+  if (nodeLevel[n] > 1 && half >= g_dotPx) {
+    const xh = nodeX + half;
+    const yh = nodeY + half;
+    emitQuadInside(nodeNw[n], nodeX, nodeY, half);
+    emitQuadInside(nodeNe[n], xh, nodeY, half);
+    emitQuadInside(nodeSw[n], nodeX, yh, half);
+    emitQuadInside(nodeSe[n], xh, yh, half);
   }
-  n.gfxCache = g_cacheId;
-  n.gfxOffset = start;
-  n.gfxLen = g_len - start;
-  n.gfxX = nodeX;
-  n.gfxY = nodeY;
+  gfxCache[n] = g_cacheId;
+  gfxOffset[n] = start;
+  gfxLen[n] = g_len - start;
+  gfxX[n] = nodeX;
+  gfxY[n] = nodeY;
 }
 
 function uploadInstances() {
@@ -439,6 +468,27 @@ function growData(n: number) {
   if (g_len > 0) nd.set(g_data.subarray(0, g_len));
   g_data = nd;
   g_cap = nc;
+}
+
+function growGfx(n: number) {
+  let nc = gfxCap;
+  while (nc < n) nc *= 2;
+  const cache = new Uint32Array(nc);
+  const offset = new Uint32Array(nc);
+  const len = new Uint32Array(nc);
+  const x = new Float64Array(nc);
+  const y = new Float64Array(nc);
+  cache.set(gfxCache);
+  offset.set(gfxOffset);
+  len.set(gfxLen);
+  x.set(gfxX);
+  y.set(gfxY);
+  gfxCap = nc;
+  gfxCache = cache;
+  gfxOffset = offset;
+  gfxLen = len;
+  gfxX = x;
+  gfxY = y;
 }
 
 // shader helpers

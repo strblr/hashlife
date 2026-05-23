@@ -71,10 +71,10 @@ function postMetrics(): void {
   self.postMessage({
     type: "metrics",
     generation: hl.generation,
-    population: hl.root.population,
+    population: hl.nodePopulation[hl.root],
     cacheSize: hl.cacheSize(),
     fps,
-    level: hl.root.level
+    level: hl.nodeLevel[hl.root]
   } satisfies WorkerToMain);
 }
 
@@ -103,7 +103,7 @@ function pauseInternal(): void {
 function fit(): void {
   const { view } = gfx;
   if (view.w === 0 || view.h === 0) return;
-  if (hl.root.population === 0) {
+  if (hl.nodePopulation[hl.root] === 0) {
     const cs = DEFAULT_CAMERA.cellSize;
     gfx.updateCamera({
       cellSize: cs,
@@ -227,7 +227,7 @@ function loadFromText(type: "rle" | "mc", text: string, label: string) {
     });
     return;
   }
-  if (root.population === 0) {
+  if (hl.nodePopulation[root] === 0) {
     postLog({ type: "error", text: "Pattern is empty." });
     return;
   }

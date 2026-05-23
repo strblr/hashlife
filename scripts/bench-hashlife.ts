@@ -34,6 +34,10 @@ interface Cell {
   stepExp: number;
   n: number;
   loadMs: number;
+  loadBuildMs: number;
+  loadGcMs: number;
+  loadCacheBeforeGc: number;
+  loadCacheAfterGc: number;
   firstMs: number | "timeout";
   avgMs: number | "timeout";
   tailMs: number | "timeout";
@@ -44,14 +48,31 @@ interface Cell {
   generation: bigint;
 }
 
-async function loadFresh(pattern: string): Promise<{ loadMs: number }> {
+interface LoadStats {
+  loadMs: number;
+  buildMs: number;
+  gcMs: number;
+  cacheBeforeGc: number;
+  cacheAfterGc: number;
+}
+
+async function loadFresh(pattern: string): Promise<LoadStats> {
   const text = await Bun.file(resolve(PATTERNS_DIR, pattern)).text();
   const t0 = performance.now();
   hl.clear();
   const parsed = pattern.endsWith(".mc") ? parseMC(text) : parseRLE(text);
   hl.loadRoot(parsed.root);
+  const beforeGc = performance.now();
+  const cacheBeforeGc = hl.cacheSize();
   hl.gc();
-  return { loadMs: performance.now() - t0 };
+  const afterGc = performance.now();
+  return {
+    loadMs: afterGc - t0,
+    buildMs: beforeGc - t0,
+    gcMs: afterGc - beforeGc,
+    cacheBeforeGc,
+    cacheAfterGc: hl.cacheSize()
+  };
 }
 
 type StepStats =
@@ -94,11 +115,21 @@ async function benchOne(
   let bestFirst = Infinity;
   let bestTail = Infinity;
   let bestLoad = Infinity;
+  let bestLoadBuild = Infinity;
+  let bestLoadGc = Infinity;
+  let bestLoadCacheBeforeGc = 0;
+  let bestLoadCacheAfterGc = 0;
   let timedOut = false;
   let bestCacheDelta = 0;
   for (let t = 0; t < TRIALS; t++) {
-    const { loadMs } = await loadFresh(pattern);
-    if (loadMs < bestLoad) bestLoad = loadMs;
+    const load = await loadFresh(pattern);
+    if (load.loadMs < bestLoad) {
+      bestLoad = load.loadMs;
+      bestLoadBuild = load.buildMs;
+      bestLoadGc = load.gcMs;
+      bestLoadCacheBeforeGc = load.cacheBeforeGc;
+      bestLoadCacheAfterGc = load.cacheAfterGc;
+    }
     const cacheBefore = hl.cacheSize();
     const stats = runSteps(stepExp, n);
     const cacheDelta = hl.cacheSize() - cacheBefore;
@@ -118,26 +149,30 @@ async function benchOne(
     stepExp,
     n,
     loadMs: bestLoad,
+    loadBuildMs: bestLoadBuild,
+    loadGcMs: bestLoadGc,
+    loadCacheBeforeGc: bestLoadCacheBeforeGc,
+    loadCacheAfterGc: bestLoadCacheAfterGc,
     firstMs: timedOut ? "timeout" : bestFirst,
     avgMs: timedOut ? "timeout" : bestAvg,
     tailMs: timedOut ? "timeout" : bestTail,
     cacheSize: hl.cacheSize(),
     cacheDelta: bestCacheDelta,
-    population: hl.root.population,
+    population: hl.nodePopulation[hl.root],
     generation: hl.generation
   };
 }
 
 function fmtTable(rows: Cell[]): string {
   const head =
-    "| pattern | stepExp | n | load-ms | first-ms | avg-ms | tail-ms | cacheSize | cacheDelta | population | generation |";
+    "| pattern | stepExp | n | load-ms | load-build-ms | load-gc-ms | load-cache-before-gc | load-cache-after-gc | first-ms | avg-ms | tail-ms | cacheSize | cacheDelta | population | generation |";
   const sep =
-    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |";
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |";
   const body = rows.map(c => {
     const first = c.firstMs === "timeout" ? "timeout" : c.firstMs.toFixed(6);
     const avg = c.avgMs === "timeout" ? "timeout" : c.avgMs.toFixed(6);
     const tail = c.tailMs === "timeout" ? "timeout" : c.tailMs.toFixed(6);
-    return `| ${c.pattern} | ${c.stepExp} | ${c.n} | ${c.loadMs.toFixed(2)} | ${first} | ${avg} | ${tail} | ${c.cacheSize} | ${c.cacheDelta} | ${c.population} | ${c.generation.toString()} |`;
+    return `| ${c.pattern} | ${c.stepExp} | ${c.n} | ${c.loadMs.toFixed(2)} | ${c.loadBuildMs.toFixed(2)} | ${c.loadGcMs.toFixed(2)} | ${c.loadCacheBeforeGc} | ${c.loadCacheAfterGc} | ${first} | ${avg} | ${tail} | ${c.cacheSize} | ${c.cacheDelta} | ${c.population} | ${c.generation.toString()} |`;
   });
   return [head, sep, ...body].join("\n");
 }

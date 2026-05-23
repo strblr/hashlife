@@ -9,12 +9,12 @@ export interface SfxStore {
 export const useSfxStore = create<SfxStore>()(
   persist(
     set => ({
-      sfxMuted: false,
+      sfxMuted: true,
       toggleSfxMuted: () => set(s => ({ sfxMuted: !s.sfxMuted }))
     }),
     {
       name: "sfx-store",
-      version: 1
+      version: 2
     }
   )
 );
