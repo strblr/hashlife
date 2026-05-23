@@ -4,14 +4,17 @@ import {
   Grid2x2,
   Maximize,
   Menu,
+  Minus,
   Pause,
   Pencil,
   Play,
-  StepForward,
-  Trash2
+  Plus,
+  StepForward
 } from "lucide-react";
 import { IconButton } from "@/components";
 import { hashlifeApi, useHashlifeStore } from "@/stores";
+import { formatNumberShort } from "@/utils";
+import { STEP_OPTIONS } from "@/shared";
 
 export function MobileOverlay({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -39,9 +42,6 @@ export function MobileOverlay({ children }: { children: ReactNode }) {
           >
             <StepForward />
           </IconButton>
-          <IconButton size="LG" aria-label="Clear" onClick={hashlifeApi.clear}>
-            <Trash2 />
-          </IconButton>
           <IconButton
             size="LG"
             aria-label="Fit to bounds"
@@ -67,6 +67,7 @@ export function MobileOverlay({ children }: { children: ReactNode }) {
           >
             <Grid2x2 />
           </IconButton>
+          <StepRateStepper />
         </div>
         <IconButton
           size="LG"
@@ -93,5 +94,45 @@ export function MobileOverlay({ children }: { children: ReactNode }) {
         </Drawer.Portal>
       </Drawer.Root>
     </>
+  );
+}
+
+function StepRateStepper() {
+  const stepExp = useHashlifeStore(s => s.stepExp);
+  const idx = STEP_OPTIONS.indexOf(stepExp);
+  const canDec = idx > 0;
+  const canInc = idx >= 0 && idx < STEP_OPTIONS.length - 1;
+
+  return (
+    <div
+      role="group"
+      aria-label="Step rate"
+      className="inline-flex shrink-0 items-stretch"
+    >
+      <IconButton
+        variant="OUTLINE"
+        className="h-11 w-7 border-r-0"
+        aria-label="Slower step rate"
+        disabled={!canDec}
+        onClick={() => hashlifeApi.bumpStepExp(-1)}
+      >
+        <Minus className="size-3.5" />
+      </IconButton>
+      <div
+        aria-live="polite"
+        className="flex h-11 min-w-11 items-center justify-center border border-border bg-surface px-1.5 font-mono text-[0.8rem] font-medium tracking-[0.04em] tabular-nums text-green text-shadow-green backdrop-blur-md"
+      >
+        {formatNumberShort(2 ** stepExp, { decimals: 0, binary: true })}
+      </div>
+      <IconButton
+        variant="OUTLINE"
+        className="h-11 w-7 border-l-0"
+        aria-label="Faster step rate"
+        disabled={!canInc}
+        onClick={() => hashlifeApi.bumpStepExp(1)}
+      >
+        <Plus className="size-3.5" />
+      </IconButton>
+    </div>
   );
 }
