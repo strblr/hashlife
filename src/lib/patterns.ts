@@ -386,6 +386,18 @@ export const PATTERNS: Pattern[] = [
     description: "Variant in the pi orbital family."
   },
   {
+    filename: "halfmax.rle",
+    name: "Halfmax",
+    description:
+      "Half-spacefiller that expands at c/2 in three directions, filling half the plane."
+  },
+  {
+    filename: "max.rle",
+    name: "Max (spacefiller)",
+    description:
+      "Small, fast spacefiller that expands at c/2 in all four directions, filling the plane with zebra stripes."
+  },
+  {
     filename: "turingmachine.rle",
     name: "Rendell's Turing machine",
     description:
