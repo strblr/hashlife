@@ -68,6 +68,7 @@ let g_dotPx = 1;
 let g_cacheId = 0;
 let g_px = camera.cellSize * view.dpr;
 let g_showGrid = camera.cellSize >= GRID_THRESHOLD_CSS;
+
 let gfxCap = 4096;
 let gfxCache = new Uint32Array(gfxCap);
 let gfxOffset = new Uint32Array(gfxCap);
