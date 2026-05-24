@@ -1,4 +1,6 @@
+export * from "./brand-title";
 export * from "./controls-panel";
+export * from "./credits";
 export * from "./github-icon";
 export * from "./hashlife-value";
 export * from "./header";

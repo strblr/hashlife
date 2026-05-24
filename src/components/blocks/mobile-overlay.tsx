@@ -11,7 +11,7 @@ import {
   Plus,
   StepForward
 } from "lucide-react";
-import { IconButton } from "@/components";
+import { BrandTitle, Credits, IconButton } from "@/components";
 import { hashlifeApi, useHashlifeStore } from "@/stores";
 import { formatNumberShort } from "@/utils";
 import { STEP_OPTIONS } from "@/shared";
@@ -87,6 +87,10 @@ export function MobileOverlay({ children }: { children: ReactNode }) {
             <Drawer.Description className="sr-only">
               Hashlife controls, patterns, metrics and info
             </Drawer.Description>
+            <div className="mb-4 flex items-center gap-4 border-b border-border pb-4">
+              <BrandTitle />
+              <Credits className="ml-auto" />
+            </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1 *:shrink-0">
               {children}
             </div>

@@ -1,14 +1,15 @@
 import { Volume2, VolumeX } from "lucide-react";
 import {
   Badge,
+  BrandTitle,
+  Credits,
   HashlifeValue,
   IconButton,
   Separator,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  Typography,
-  GitHubIcon
+  Typography
 } from "@/components";
 import { useHashlifeStore, useSfxStore } from "@/stores";
 import { formatNumber } from "@/utils";
@@ -22,12 +23,7 @@ export function Header() {
   return (
     <header className="shrink-0 border-b border-border bg-surface px-4 py-3">
       <div className="flex items-center gap-4">
-        <Typography
-          variant="H1"
-          className="text-xl tracking-wider text-secondary"
-        >
-          HASHLIFE
-        </Typography>
+        <BrandTitle />
         <Badge variant={playing ? "SCANNING" : "OFFLINE"}>
           {playing ? "running" : "idle"}
         </Badge>
@@ -48,27 +44,7 @@ export function Header() {
             className="text-secondary"
           />
         </Typography>
-        <Typography
-          variant="MUTED"
-          className="ml-auto text-[0.65rem] tracking-[0.18em] leading-normal"
-        >
-          gosper · 1984
-        </Typography>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <IconButton asChild variant="GHOST">
-              <a
-                href={SOURCE_REPO}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="View source on GitHub"
-              >
-                <GitHubIcon />
-              </a>
-            </IconButton>
-          </TooltipTrigger>
-          <TooltipContent>Source on GitHub</TooltipContent>
-        </Tooltip>
+        <Credits className="ml-auto" />
         <Tooltip>
           <TooltipTrigger asChild>
             <IconButton
@@ -86,7 +62,3 @@ export function Header() {
     </header>
   );
 }
-
-// Utils
-
-const SOURCE_REPO = "https://github.com/strblr/hashlife";
