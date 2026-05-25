@@ -21,6 +21,7 @@ const COLOR_QUAD = [0xd8 / 255, 0xd8 / 255, 0xd8 / 255, 0.2];
 const GRID_THRESHOLD_CSS = 8;
 const DOT_THRESHOLD_CSS = 1;
 const QUAD_LINE_WIDTH_CSS = 1;
+const INSTANCE_RING_SIZE = 3;
 
 export interface Camera {
   cellSize: number;
@@ -51,11 +52,16 @@ let gridU!: Record<
   WebGLUniformLocation
 >;
 let quadU!: Record<"invHalfRes" | "linePx" | "color", WebGLUniformLocation>;
-let instBuf!: WebGLBuffer;
-let cellVAO!: WebGLVertexArrayObject;
 let gridVAO!: WebGLVertexArrayObject;
-let quadVAO!: WebGLVertexArrayObject;
-let instBytes = 0;
+let cellInstances!: InstanceStream;
+let quadInstances!: InstanceStream;
+
+interface InstanceStream {
+  buffers: WebGLBuffer[];
+  vaos: WebGLVertexArrayObject[];
+  bytes: number[];
+  cursor: number;
+}
 
 // tree-walk scratch
 
@@ -139,21 +145,6 @@ export function init(c: OffscreenCanvas) {
     gl.STATIC_DRAW
   );
 
-  instBuf = gl.createBuffer();
-
-  // Cell VAO: a_corner per-vertex (divisor 0), a_inst per-instance (divisor 1)
-  cellVAO = gl.createVertexArray();
-  gl.bindVertexArray(cellVAO);
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
-  const cellCorner = gl.getAttribLocation(cellProg, "a_corner");
-  gl.enableVertexAttribArray(cellCorner);
-  gl.vertexAttribPointer(cellCorner, 2, gl.FLOAT, false, 0, 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-  const cellInst = gl.getAttribLocation(cellProg, "a_inst");
-  gl.enableVertexAttribArray(cellInst);
-  gl.vertexAttribPointer(cellInst, 3, gl.FLOAT, false, 12, 0);
-  gl.vertexAttribDivisor(cellInst, 1);
-
   // Grid VAO: a_corner per-vertex (divisor 0)
   gridVAO = gl.createVertexArray();
   gl.bindVertexArray(gridVAO);
@@ -162,18 +153,37 @@ export function init(c: OffscreenCanvas) {
   gl.enableVertexAttribArray(gridCorner);
   gl.vertexAttribPointer(gridCorner, 2, gl.FLOAT, false, 0, 0);
 
-  // Quad overlay VAO: hollow-ring geometry; rasterizes only the border band.
-  quadVAO = gl.createVertexArray();
-  gl.bindVertexArray(quadVAO);
-  gl.bindBuffer(gl.ARRAY_BUFFER, ringBuf);
+  const cellCorner = gl.getAttribLocation(cellProg, "a_corner");
+  const cellInst = gl.getAttribLocation(cellProg, "a_inst");
+  cellInstances = createInstanceStream(instBuf => {
+    // Cell VAO: a_corner per-vertex (divisor 0), a_inst per-instance (divisor 1)
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.enableVertexAttribArray(cellCorner);
+    gl.vertexAttribPointer(cellCorner, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+    gl.enableVertexAttribArray(cellInst);
+    gl.vertexAttribPointer(cellInst, 3, gl.FLOAT, false, 12, 0);
+    gl.vertexAttribDivisor(cellInst, 1);
+    return vao;
+  });
+
   const quadVert = gl.getAttribLocation(quadProg, "a_vert");
-  gl.enableVertexAttribArray(quadVert);
-  gl.vertexAttribPointer(quadVert, 3, gl.FLOAT, false, 12, 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
   const quadInst = gl.getAttribLocation(quadProg, "a_inst");
-  gl.enableVertexAttribArray(quadInst);
-  gl.vertexAttribPointer(quadInst, 3, gl.FLOAT, false, 12, 0);
-  gl.vertexAttribDivisor(quadInst, 1);
+  quadInstances = createInstanceStream(instBuf => {
+    // Quad overlay VAO: hollow-ring geometry; rasterizes only the border band.
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, ringBuf);
+    gl.enableVertexAttribArray(quadVert);
+    gl.vertexAttribPointer(quadVert, 3, gl.FLOAT, false, 12, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+    gl.enableVertexAttribArray(quadInst);
+    gl.vertexAttribPointer(quadInst, 3, gl.FLOAT, false, 12, 0);
+    gl.vertexAttribDivisor(quadInst, 1);
+    return vao;
+  });
 
   gl.bindVertexArray(null);
 }
@@ -234,9 +244,9 @@ export function render(root: Node): void {
   emit(root, nodeX, nodeY, screenSize);
 
   if (g_len > 0) {
-    uploadInstances();
+    const vao = uploadInstances(cellInstances);
     gl.useProgram(cellProg);
-    gl.bindVertexArray(cellVAO);
+    gl.bindVertexArray(vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, g_len / 3);
   }
 
@@ -246,11 +256,11 @@ export function render(root: Node): void {
     emitQuad(root, nodeX, nodeY, screenSize);
 
     if (g_len === 0) return;
-    uploadInstances();
+    const vao = uploadInstances(quadInstances);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(quadProg);
-    gl.bindVertexArray(quadVAO);
+    gl.bindVertexArray(vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 10, g_len / 3);
     gl.disable(gl.BLEND);
   }
@@ -450,16 +460,34 @@ function emitQuadInside(
   gfxY[n] = nodeY;
 }
 
-function uploadInstances() {
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+function createInstanceStream(
+  createVao: (instBuf: WebGLBuffer) => WebGLVertexArrayObject
+): InstanceStream {
+  const buffers: WebGLBuffer[] = [];
+  const vaos: WebGLVertexArrayObject[] = [];
+  const bytes: number[] = [];
+  for (let i = 0; i < INSTANCE_RING_SIZE; i++) {
+    const buffer = must(gl.createBuffer());
+    buffers.push(buffer);
+    vaos.push(createVao(buffer));
+    bytes.push(0);
+  }
+  return { buffers, vaos, bytes, cursor: 0 };
+}
+
+function uploadInstances(stream: InstanceStream): WebGLVertexArrayObject {
+  const i = stream.cursor;
+  stream.cursor = (i + 1) % INSTANCE_RING_SIZE;
+  gl.bindBuffer(gl.ARRAY_BUFFER, stream.buffers[i]);
   const needBytes = g_len * 4;
-  if (needBytes > instBytes) {
-    let nb = instBytes || 4096;
+  if (needBytes > stream.bytes[i]) {
+    let nb = stream.bytes[i] || 4096;
     while (nb < needBytes) nb *= 2;
-    gl.bufferData(gl.ARRAY_BUFFER, nb, gl.STREAM_DRAW);
-    instBytes = nb;
+    gl.bufferData(gl.ARRAY_BUFFER, nb, gl.DYNAMIC_DRAW);
+    stream.bytes[i] = nb;
   }
   gl.bufferSubData(gl.ARRAY_BUFFER, 0, g_data, 0, g_len);
+  return stream.vaos[i];
 }
 
 function growData(n: number) {
