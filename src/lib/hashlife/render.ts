@@ -94,6 +94,7 @@ export function init(c: OffscreenCanvas) {
   if (!ctx) throw new Error("WebGL2 not supported");
   gl = ctx;
   gl.clearColor(COLOR_BG[0], COLOR_BG[1], COLOR_BG[2], COLOR_BG[3]);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   cellProg = link(VS_CELL, FS_CELL);
   gridProg = link(VS_GRID, FS_GRID);
@@ -258,7 +259,6 @@ export function render(root: Node): void {
     if (g_len === 0) return;
     const vao = uploadInstances(quadInstances);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(quadProg);
     gl.bindVertexArray(vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 10, g_len / 3);
