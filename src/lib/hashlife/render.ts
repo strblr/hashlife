@@ -572,7 +572,7 @@ void main() {
 }`;
 
 const FS_CELL = `#version 300 es
-precision highp float;
+precision lowp float;
 uniform vec4 u_color;
 out vec4 oColor;
 void main() { oColor = u_color; }`;
@@ -625,7 +625,7 @@ void main() {
 }`;
 
 const FS_QUAD = `#version 300 es
-precision highp float;
+precision lowp float;
 uniform vec4 u_color;
 out vec4 oColor;
 void main() { oColor = u_color; }`;
